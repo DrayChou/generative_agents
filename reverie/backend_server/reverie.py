@@ -27,6 +27,7 @@ import time
 import math
 import os
 import shutil
+import traceback
 
 from selenium import webdriver
 
@@ -592,7 +593,8 @@ class ReverieServer:
 
         print (ret_str)
 
-      except: 
+      except:
+        traceback.print_exc()
         print ("Error.")
         traceback.print_exc()
         pass
