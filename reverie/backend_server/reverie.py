@@ -19,6 +19,7 @@ to the memory stream, and "reverie" to refer to the overarching simulation
 framework.
 """
 import json
+import traceback
 import numpy
 import datetime
 import pickle
@@ -593,6 +594,7 @@ class ReverieServer:
 
       except: 
         print ("Error.")
+        traceback.print_exc()
         pass
 
 

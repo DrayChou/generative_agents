@@ -6,12 +6,22 @@ Description: Wrapper functions for calling OpenAI APIs.
 """
 import json
 import random
+import traceback
 import openai
 import time 
 
 from utils import *
 
+if openai_api_type == "azure":
+  openai.api_type = openai_api_type
+  openai.api_version = openai_api_version
+  
 openai.api_key = openai_api_key
+if openai_api_base is not None:
+  openai.api_base = openai_api_base
+
+if proxies is not None:
+  openai.proxy = proxies
 
 def temp_sleep(seconds=0.1):
   time.sleep(seconds)
@@ -20,7 +30,8 @@ def ChatGPT_single_request(prompt):
   temp_sleep()
 
   completion = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo", 
+    model=openai_api_model,
+    engine=openai_api_engine,
     messages=[{"role": "user", "content": prompt}]
   )
   return completion["choices"][0]["message"]["content"]
@@ -46,13 +57,15 @@ def GPT4_request(prompt):
 
   try: 
     completion = openai.ChatCompletion.create(
-    model="gpt-4", 
+    model=openai_api_model,
+    engine=openai_api_engine,
     messages=[{"role": "user", "content": prompt}]
     )
     return completion["choices"][0]["message"]["content"]
   
   except: 
     print ("ChatGPT ERROR")
+    traceback.print_exc()
     return "ChatGPT ERROR"
 
 
@@ -71,13 +84,15 @@ def ChatGPT_request(prompt):
   # temp_sleep()
   try: 
     completion = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo", 
+    model=openai_api_model,
+    engine=openai_api_engine,
     messages=[{"role": "user", "content": prompt}]
     )
     return completion["choices"][0]["message"]["content"]
   
   except: 
     print ("ChatGPT ERROR")
+    traceback.print_exc()
     return "ChatGPT ERROR"
 
 
@@ -115,6 +130,7 @@ def GPT4_safe_generate_response(prompt,
         print ("~~~~")
 
     except: 
+      traceback.print_exc()
       pass
 
   return False
@@ -185,6 +201,7 @@ def ChatGPT_safe_generate_response_OLD(prompt,
         print ("~~~~")
 
     except: 
+      traceback.print_exc()
       pass
   print ("FAIL SAFE TRIGGERED") 
   return fail_safe_response
@@ -208,19 +225,43 @@ def GPT_request(prompt, gpt_parameter):
   """
   temp_sleep()
   try: 
+    model = openai_api_model
+    engine = openai_api_engine
+    
+    if openai_api_type == "azure": 
+      model = None
+      engine = gpt_parameter["engine"]
+    elif openai_api_type == "chatglm": 
+      model = openai_api_model
+      engine = None
+    else:
+      model = gpt_parameter["engine"]
+      engine = None
+    
+    print("======>GPT REQUEST", gpt_parameter, "prompt:",prompt)
+    print("======>GPT REQUEST","base",openai.api_base,"gpt_parameter:","model:", model, "engine:",engine)
+    
+    if gpt_parameter["temperature"] <= 0:
+      print("======>GPT REQUEST","temperature:",gpt_parameter["temperature"],"set to 0.00000001")
+      gpt_parameter["temperature"] = 0.00000001
+    
     response = openai.Completion.create(
-                model=gpt_parameter["engine"],
-                prompt=prompt,
-                temperature=gpt_parameter["temperature"],
-                max_tokens=gpt_parameter["max_tokens"],
-                top_p=gpt_parameter["top_p"],
-                frequency_penalty=gpt_parameter["frequency_penalty"],
-                presence_penalty=gpt_parameter["presence_penalty"],
-                stream=gpt_parameter["stream"],
-                stop=gpt_parameter["stop"],)
+      # model=gpt_parameter["engine"],
+      # engine=gpt_parameter["engine"],
+      model=model,
+      engine=engine,
+      prompt=prompt,
+      temperature=gpt_parameter["temperature"],
+      max_tokens=gpt_parameter["max_tokens"],
+      top_p=gpt_parameter["top_p"],
+      frequency_penalty=gpt_parameter["frequency_penalty"],
+      presence_penalty=gpt_parameter["presence_penalty"],
+      stream=gpt_parameter["stream"],
+      stop=gpt_parameter["stop"],
+    )
     return response.choices[0].text
   except: 
-    print ("TOKEN LIMIT EXCEEDED")
+    traceback.print_exc()
     return "TOKEN LIMIT EXCEEDED"
 
 
@@ -277,15 +318,37 @@ def get_embedding(text, model="text-embedding-ada-002"):
   text = text.replace("\n", " ")
   if not text: 
     text = "this is blank"
-  return openai.Embedding.create(
-          input=[text], model=model)['data'][0]['embedding']
-
+    
+  if openai_api_type == "chatglm":
+    completion = openai.ChatCompletion.create(
+      model=openai_api_model,
+      engine=openai_api_engine,
+      messages=[{"role": "user", "content": text}]
+    )
+    return completion["choices"][0]["message"]["content"]
+  elif openai_api_type == "azure":
+    return openai.Embedding.create(
+            input=[text], 
+            engine=model
+          )['data'][0]['embedding']
+  else:
+    return openai.Embedding.create(
+            input=[text], 
+            model=model
+          )['data'][0]['embedding']
 
 if __name__ == '__main__':
-  gpt_parameter = {"engine": "text-davinci-003", "max_tokens": 50, 
-                   "temperature": 0, "top_p": 1, "stream": False,
-                   "frequency_penalty": 0, "presence_penalty": 0, 
-                   "stop": ['"']}
+  gpt_parameter = {
+    "engine": openai_api_engine,
+    "model": openai_api_model,
+    "max_tokens": 50, 
+    "temperature": 0, 
+    "top_p": 1, 
+    "stream": False,
+    "frequency_penalty": 0, 
+    "presence_penalty": 0, 
+    "stop": ['"']
+  }
   curr_input = ["driving to a friend's house"]
   prompt_lib_file = "prompt_template/test_prompt_July5.txt"
   prompt = generate_prompt(curr_input, prompt_lib_file)
